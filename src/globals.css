@@ -97,5 +97,7 @@
 
   body {
     @apply bg-background text-foreground;
+    background-image: radial-gradient(hsl(var(--muted)) 0.5px, transparent 0.5px);
+    background-size: 16px 16px;
   }
 }

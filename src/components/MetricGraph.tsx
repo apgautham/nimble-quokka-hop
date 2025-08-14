@@ -7,14 +7,17 @@ import {
   ResponsiveContainer,
   Line,
   TooltipProps,
+  CartesianGrid,
 } from 'recharts';
 import { parseISO, format } from 'date-fns';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Separator } from './ui/separator';
+import { UploadCloud } from 'lucide-react';
 
 interface MetricData {
   METRICID: string;
@@ -27,7 +30,7 @@ interface ProcessedLine {
   color: string;
   label: string;
   isSolid: boolean;
-  y: number; // Added for plotting on the LineChart
+  y: number;
 }
 
 interface UniqueMetric {
@@ -35,7 +38,6 @@ interface UniqueMetric {
   color: string;
 }
 
-// Custom Dot renderer for the vertical lines
 const CustomDot = ({ cx, payload, chartHeight, hoveredMetricId }: any) => {
   const { color, isSolid, metricId } = payload;
   const isHovered = hoveredMetricId === metricId;
@@ -55,14 +57,13 @@ const CustomDot = ({ cx, payload, chartHeight, hoveredMetricId }: any) => {
   );
 };
 
-// Custom Tooltip
 const CustomTooltip = ({ active, payload }: TooltipProps<number, string>) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload as ProcessedLine;
     return (
-      <div className="bg-background border rounded-md p-2 shadow-lg">
-        <p className="font-bold" style={{ color: data.color }}>{data.label}</p>
-        <p className="text-sm text-muted-foreground">
+      <div className="bg-background border rounded-lg p-3 shadow-lg">
+        <p className="font-bold text-base" style={{ color: data.color }}>{data.label}</p>
+        <p className="text-sm text-muted-foreground mt-1">
           {format(data.timestamp, 'yyyy-MM-dd HH:mm:ss.SSS')}
         </p>
       </div>
@@ -95,7 +96,7 @@ const MetricGraph: React.FC = () => {
           console.error("Error parsing CSV:", error);
           toast({
             title: "Error",
-            description: "Failed to parse CSV file. Please check the format. Ensure 'METRICID' and 'TIMESTAMP' columns exist.",
+            description: "Failed to parse CSV file. Please check the format.",
             variant: "destructive",
           });
         }
@@ -163,7 +164,7 @@ const MetricGraph: React.FC = () => {
 
       if (!isExpected && !isActual) return;
 
-      const color = isExpected ? 'hsl(var(--sidebar-ring))' : 'hsl(var(--destructive))';
+      const color = isExpected ? 'hsl(var(--ring))' : 'hsl(var(--destructive))';
       const baseLabel = isExpected ? `Expected: ${metricId}` : `Actual: ${metricId}`;
       
       if (!uniqueMetricsSet.has(metricId)) {
@@ -205,36 +206,42 @@ const MetricGraph: React.FC = () => {
   const chartHeight = 600;
 
   return (
-    <Card className="w-full mx-auto my-8">
+    <Card className="w-full mx-auto">
       <CardHeader>
-        <CardTitle className="text-2xl font-bold text-center">Metric Visualization Graph</CardTitle>
+        <CardTitle>Configuration</CardTitle>
+        <CardDescription>Upload your data and define the metrics you want to track.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="md:col-span-1">
-            <Label htmlFor="csv-upload" className="mb-2 block">Upload CSV File (METRICID, TIMESTAMP)</Label>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="space-y-2">
+            <Label htmlFor="csv-upload">1. Upload CSV File</Label>
             <Input id="csv-upload" type="file" accept=".csv" onChange={handleFileUpload} />
           </div>
-          <div className="md:col-span-1">
-            <Label htmlFor="expected-metrics" className="mb-2 block">Expected Metric IDs (comma-separated)</Label>
-            <Textarea id="expected-metrics" placeholder="metric_A,metric_B" value={expectedMetricsInput} onChange={(e) => setExpectedMetricsInput(e.target.value)} className="min-h-[60px]" />
+          <div className="space-y-2">
+            <Label htmlFor="expected-metrics">2. Expected Metric IDs</Label>
+            <Textarea id="expected-metrics" placeholder="e.g., metric_A,metric_B" value={expectedMetricsInput} onChange={(e) => setExpectedMetricsInput(e.target.value)} className="min-h-[40px]" />
           </div>
-          <div className="md:col-span-1">
-            <Label htmlFor="actual-metrics" className="mb-2 block">Actual Metric IDs (comma-separated)</Label>
-            <Textarea id="actual-metrics" placeholder="metric_C,metric_D" value={actualMetricsInput} onChange={(e) => setActualMetricsInput(e.target.value)} className="min-h-[60px]" />
+          <div className="space-y-2">
+            <Label htmlFor="actual-metrics">3. Actual Metric IDs</Label>
+            <Textarea id="actual-metrics" placeholder="e.g., metric_C,metric_D" value={actualMetricsInput} onChange={(e) => setActualMetricsInput(e.target.value)} className="min-h-[40px]" />
           </div>
         </div>
+      </CardContent>
+      
+      <Separator className="my-4" />
 
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-          <div className="md:col-span-4">
-            {csvData.length > 0 ? (
+      <CardContent>
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <div className="lg:col-span-4">
+            {processedGraphData.length > 0 ? (
               <div style={{ height: `${chartHeight}px`, width: '100%' }}>
                 <ResponsiveContainer>
                   <LineChart
                     data={processedGraphData}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                    margin={{ top: 5, right: 20, left: -10, bottom: 20 }}
                     onMouseLeave={() => setHoveredMetricId(null)}
                   >
+                    <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.5} />
                     <XAxis
                       type="number"
                       dataKey={(d) => d.timestamp.getTime()}
@@ -267,14 +274,16 @@ const MetricGraph: React.FC = () => {
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex items-center justify-center text-gray-500" style={{ height: `${chartHeight}px` }}>
-                <p>Upload a CSV file and define metrics to visualize.</p>
+              <div className="flex flex-col items-center justify-center text-muted-foreground border-2 border-dashed rounded-lg" style={{ height: `${chartHeight}px` }}>
+                <UploadCloud className="w-16 h-16 mb-4" />
+                <p className="text-lg font-medium">Awaiting Data</p>
+                <p>Upload a CSV file to begin visualization.</p>
               </div>
             )}
           </div>
-          <div className="md:col-span-1 border-l pl-4">
-            <h3 className="font-semibold mb-2">Metrics Legend</h3>
-            <div className="max-h-[580px] overflow-y-auto">
+          <div className="lg:col-span-1 border-l pl-4">
+            <h3 className="font-semibold mb-2 text-lg">Metrics Legend</h3>
+            <div className="max-h-[580px] overflow-y-auto pr-2">
               <ul>
                 {uniqueMetrics.map((metric) => (
                   <li
@@ -287,10 +296,10 @@ const MetricGraph: React.FC = () => {
                     onMouseLeave={() => setHoveredMetricId(null)}
                   >
                     <span
-                      className="w-3 h-3 rounded-full mr-2 inline-block"
+                      className="w-3 h-3 rounded-full mr-3 shrink-0"
                       style={{ backgroundColor: metric.color }}
                     ></span>
-                    <span className="truncate text-sm">{metric.id}</span>
+                    <span className="truncate text-sm font-medium">{metric.id}</span>
                   </li>
                 ))}
               </ul>
