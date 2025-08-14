@@ -38,7 +38,7 @@ interface UniqueMetric {
   color: string;
 }
 
-const CustomDot = ({ cx, payload, plotAreaHeight, selectedMetricIds, hoveredMetricId }: any) => {
+const CustomDot = ({ cx, cy, payload, plotAreaHeight, selectedMetricIds, hoveredMetricId }: any) => {
   const { color, isSolid, metricId } = payload;
 
   const isClicked = selectedMetricIds.includes(metricId);
@@ -48,12 +48,14 @@ const CustomDot = ({ cx, payload, plotAreaHeight, selectedMetricIds, hoveredMetr
   const isFilteredView = selectedMetricIds.length > 0 || hoveredMetricId !== null;
   const isDimmed = isFilteredView && !isActive;
 
+  // The 'cy' prop gives the y-coordinate of the data point on the chart.
+  // We draw the line from the top of the plot area down to this point.
   return (
     <line
       x1={cx}
       y1={0}
       x2={cx}
-      y2={plotAreaHeight}
+      y2={cy} // Draw line down to the y-coordinate of the data point (which is on the x-axis)
       stroke={color}
       strokeWidth={isActive ? 3 : 1.5}
       strokeOpacity={isDimmed ? 0.2 : 1}
@@ -180,15 +182,15 @@ const MetricGraph: React.FC = () => {
       }
 
       if (timestamps.length === 1) {
-        graphElements.push({ metricId, timestamp: timestamps[0], color, label: baseLabel, isSolid: false, y: 0.5 });
+        graphElements.push({ metricId, timestamp: timestamps[0], color, label: baseLabel, isSolid: false, y: 0 });
       } else if (timestamps.length >= 2) {
         if (timestamps.length > 2) {
           console.warn(`METRICID ${metricId} has ${timestamps.length} timestamps. Using oldest and latest.`);
         }
         const oldest = timestamps[0];
         const latest = timestamps[timestamps.length - 1];
-        graphElements.push({ metricId, timestamp: oldest, color, label: `${baseLabel} (start)`, isSolid: false, y: 0.5 });
-        graphElements.push({ metricId, timestamp: latest, color, label: `${baseLabel} (end)`, isSolid: true, y: 0.5 });
+        graphElements.push({ metricId, timestamp: oldest, color, label: `${baseLabel} (start)`, isSolid: false, y: 0 });
+        graphElements.push({ metricId, timestamp: latest, color, label: `${baseLabel} (end)`, isSolid: true, y: 0 });
       }
     });
     
@@ -212,8 +214,7 @@ const MetricGraph: React.FC = () => {
   const formatXAxisTick = useCallback((tickItem: number) => format(new Date(tickItem), 'HH:mm:ss'), []);
 
   const chartHeight = 600;
-  const chartMargin = { top: 5, right: 20, left: -10, bottom: 20 };
-  const plotAreaHeight = chartHeight - chartMargin.top - chartMargin.bottom;
+  const chartMargin = { top: 20, right: 20, left: -10, bottom: 40 };
 
   const handleLegendClick = (metricId: string) => {
     setSelectedMetricIds(prev => 
@@ -295,9 +296,11 @@ const MetricGraph: React.FC = () => {
                       tickFormatter={formatXAxisTick}
                       scale="time"
                       name="Time"
-                      label={{ value: 'Time', position: 'insideBottom', offset: -10 }}
+                      label={{ value: 'Time', position: 'insideBottom', offset: -20 }}
+                      axisLine={{ transform: 'translate(0, 10)' }}
+                      tickLine={{ transform: 'translate(0, 10)' }}
                     />
-                    <YAxis domain={[0, 1]} hide />
+                    <YAxis domain={[-0.1, 1]} hide />
                     <Tooltip
                       content={<CustomTooltip />}
                       cursor={false}
@@ -308,7 +311,7 @@ const MetricGraph: React.FC = () => {
                       dataKey="y"
                       stroke="transparent"
                       isAnimationActive={false}
-                      dot={<CustomDot plotAreaHeight={plotAreaHeight} selectedMetricIds={selectedMetricIds} hoveredMetricId={hoveredMetricId} />}
+                      dot={<CustomDot selectedMetricIds={selectedMetricIds} hoveredMetricId={hoveredMetricId} />}
                     />
                   </LineChart>
                 </ResponsiveContainer>
