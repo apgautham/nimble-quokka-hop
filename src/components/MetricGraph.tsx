@@ -38,19 +38,21 @@ interface UniqueMetric {
   color: string;
 }
 
-const CustomDot = ({ cx, payload, chartHeight, hoveredMetricId }: any) => {
+const CustomDot = ({ cx, payload, plotAreaHeight, selectedMetricIds }: any) => {
   const { color, isSolid, metricId } = payload;
-  const isHovered = hoveredMetricId === metricId;
-  const isDimmed = hoveredMetricId && !isHovered;
+  
+  const isSelected = selectedMetricIds.includes(metricId);
+  // Dim if there's a selection and this metric is not part of it.
+  const isDimmed = selectedMetricIds.length > 0 && !isSelected;
 
   return (
     <line
       x1={cx}
       y1={0}
       x2={cx}
-      y2={chartHeight}
+      y2={plotAreaHeight} // Use calculated plot area height to prevent overflow
       stroke={color}
-      strokeWidth={isHovered ? 3 : 1.5}
+      strokeWidth={isSelected ? 3 : 1.5}
       strokeOpacity={isDimmed ? 0.2 : 1}
       strokeDasharray={isSolid ? undefined : "4 4"}
     />
@@ -76,7 +78,9 @@ const MetricGraph: React.FC = () => {
   const [csvData, setCsvData] = useState<MetricData[]>([]);
   const [expectedMetricsInput, setExpectedMetricsInput] = useState<string>('');
   const [actualMetricsInput, setActualMetricsInput] = useState<string>('');
-  const [hoveredMetricId, setHoveredMetricId] = useState<string | null>(null);
+  const [expectedColor, setExpectedColor] = useState<string>('#3b82f6');
+  const [actualColor, setActualColor] = useState<string>('#ef4444');
+  const [selectedMetricIds, setSelectedMetricIds] = useState<string[]>([]);
   const { toast } = useToast();
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -164,7 +168,7 @@ const MetricGraph: React.FC = () => {
 
       if (!isExpected && !isActual) return;
 
-      const color = isExpected ? 'hsl(var(--ring))' : 'hsl(var(--destructive))';
+      const color = isExpected ? expectedColor : actualColor;
       const baseLabel = isExpected ? `Expected: ${metricId}` : `Actual: ${metricId}`;
       
       if (!uniqueMetricsSet.has(metricId)) {
@@ -190,7 +194,7 @@ const MetricGraph: React.FC = () => {
       processedGraphData: graphElements,
       uniqueMetrics: Array.from(uniqueMetricsSet.values()),
     };
-  }, [csvData, expectedMetrics, actualMetrics]);
+  }, [csvData, expectedMetrics, actualMetrics, expectedColor, actualColor]);
 
   const chartDomain = useMemo(() => {
     if (processedGraphData.length === 0) return [0, 1];
@@ -204,12 +208,22 @@ const MetricGraph: React.FC = () => {
   const formatXAxisTick = useCallback((tickItem: number) => format(new Date(tickItem), 'HH:mm:ss'), []);
 
   const chartHeight = 600;
+  const chartMargin = { top: 5, right: 20, left: -10, bottom: 20 };
+  const plotAreaHeight = chartHeight - chartMargin.top - chartMargin.bottom;
+
+  const handleLegendClick = (metricId: string) => {
+    setSelectedMetricIds(prev => 
+      prev.includes(metricId) 
+        ? prev.filter(id => id !== metricId)
+        : [...prev, metricId]
+    );
+  };
 
   return (
     <Card className="w-full mx-auto">
       <CardHeader>
         <CardTitle>Configuration</CardTitle>
-        <CardDescription>Upload your data and define the metrics you want to track.</CardDescription>
+        <CardDescription>Upload your data and define the metrics and colors you want to track.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -226,6 +240,16 @@ const MetricGraph: React.FC = () => {
             <Textarea id="actual-metrics" placeholder="e.g., metric_C,metric_D" value={actualMetricsInput} onChange={(e) => setActualMetricsInput(e.target.value)} className="min-h-[40px]" />
           </div>
         </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+            <div className="space-y-2 md:col-start-2">
+                <Label htmlFor="expected-color">Expected Metric Color</Label>
+                <Input id="expected-color" type="color" value={expectedColor} onChange={(e) => setExpectedColor(e.target.value)} className="p-1 h-10 w-full"/>
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="actual-color">Actual Metric Color</Label>
+                <Input id="actual-color" type="color" value={actualColor} onChange={(e) => setActualColor(e.target.value)} className="p-1 h-10 w-full"/>
+            </div>
+        </div>
       </CardContent>
       
       <Separator className="my-4" />
@@ -238,8 +262,7 @@ const MetricGraph: React.FC = () => {
                 <ResponsiveContainer>
                   <LineChart
                     data={processedGraphData}
-                    margin={{ top: 5, right: 20, left: -10, bottom: 20 }}
-                    onMouseLeave={() => setHoveredMetricId(null)}
+                    margin={chartMargin}
                   >
                     <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.5} />
                     <XAxis
@@ -262,13 +285,7 @@ const MetricGraph: React.FC = () => {
                       dataKey="y"
                       stroke="transparent"
                       isAnimationActive={false}
-                      dot={<CustomDot chartHeight={chartHeight} hoveredMetricId={hoveredMetricId} />}
-                      activeDot={(props: any) => {
-                        if (props.payload.metricId !== hoveredMetricId) {
-                          setHoveredMetricId(props.payload.metricId);
-                        }
-                        return <CustomDot {...props} chartHeight={chartHeight} hoveredMetricId={props.payload.metricId} />;
-                      }}
+                      dot={<CustomDot plotAreaHeight={plotAreaHeight} selectedMetricIds={selectedMetricIds} />}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -283,6 +300,7 @@ const MetricGraph: React.FC = () => {
           </div>
           <div className="lg:col-span-1 border-l pl-4">
             <h3 className="font-semibold mb-2 text-lg">Metrics Legend</h3>
+            <p className="text-sm text-muted-foreground mb-2">Click to select/deselect.</p>
             <div className="max-h-[580px] overflow-y-auto pr-2">
               <ul>
                 {uniqueMetrics.map((metric) => (
@@ -290,10 +308,9 @@ const MetricGraph: React.FC = () => {
                     key={metric.id}
                     className={cn(
                       "flex items-center p-2 rounded-md cursor-pointer transition-colors",
-                      hoveredMetricId === metric.id && "bg-accent"
+                      selectedMetricIds.includes(metric.id) && "bg-accent"
                     )}
-                    onMouseEnter={() => setHoveredMetricId(metric.id)}
-                    onMouseLeave={() => setHoveredMetricId(null)}
+                    onClick={() => handleLegendClick(metric.id)}
                   >
                     <span
                       className="w-3 h-3 rounded-full mr-3 shrink-0"
