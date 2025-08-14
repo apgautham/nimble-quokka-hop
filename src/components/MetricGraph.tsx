@@ -38,21 +38,24 @@ interface UniqueMetric {
   color: string;
 }
 
-const CustomDot = ({ cx, payload, plotAreaHeight, selectedMetricIds }: any) => {
+const CustomDot = ({ cx, payload, plotAreaHeight, selectedMetricIds, hoveredMetricId }: any) => {
   const { color, isSolid, metricId } = payload;
+
+  const isClicked = selectedMetricIds.includes(metricId);
+  const isHovered = hoveredMetricId === metricId;
+  const isActive = isClicked || isHovered;
   
-  const isSelected = selectedMetricIds.includes(metricId);
-  // Dim if there's a selection and this metric is not part of it.
-  const isDimmed = selectedMetricIds.length > 0 && !isSelected;
+  const isFilteredView = selectedMetricIds.length > 0 || hoveredMetricId !== null;
+  const isDimmed = isFilteredView && !isActive;
 
   return (
     <line
       x1={cx}
       y1={0}
       x2={cx}
-      y2={plotAreaHeight} // Use calculated plot area height to prevent overflow
+      y2={plotAreaHeight}
       stroke={color}
-      strokeWidth={isSelected ? 3 : 1.5}
+      strokeWidth={isActive ? 3 : 1.5}
       strokeOpacity={isDimmed ? 0.2 : 1}
       strokeDasharray={isSolid ? undefined : "4 4"}
     />
@@ -81,6 +84,7 @@ const MetricGraph: React.FC = () => {
   const [expectedColor, setExpectedColor] = useState<string>('#3b82f6');
   const [actualColor, setActualColor] = useState<string>('#ef4444');
   const [selectedMetricIds, setSelectedMetricIds] = useState<string[]>([]);
+  const [hoveredMetricId, setHoveredMetricId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -285,7 +289,7 @@ const MetricGraph: React.FC = () => {
                       dataKey="y"
                       stroke="transparent"
                       isAnimationActive={false}
-                      dot={<CustomDot plotAreaHeight={plotAreaHeight} selectedMetricIds={selectedMetricIds} />}
+                      dot={<CustomDot plotAreaHeight={plotAreaHeight} selectedMetricIds={selectedMetricIds} hoveredMetricId={hoveredMetricId} />}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -300,7 +304,7 @@ const MetricGraph: React.FC = () => {
           </div>
           <div className="lg:col-span-1 border-l pl-4">
             <h3 className="font-semibold mb-2 text-lg">Metrics Legend</h3>
-            <p className="text-sm text-muted-foreground mb-2">Click to select/deselect.</p>
+            <p className="text-sm text-muted-foreground mb-2">Click to select, hover to highlight.</p>
             <div className="max-h-[580px] overflow-y-auto pr-2">
               <ul>
                 {uniqueMetrics.map((metric) => (
@@ -308,9 +312,12 @@ const MetricGraph: React.FC = () => {
                     key={metric.id}
                     className={cn(
                       "flex items-center p-2 rounded-md cursor-pointer transition-colors",
-                      selectedMetricIds.includes(metric.id) && "bg-accent"
+                      selectedMetricIds.includes(metric.id) && "bg-accent",
+                      hoveredMetricId === metric.id && "bg-accent"
                     )}
                     onClick={() => handleLegendClick(metric.id)}
+                    onMouseEnter={() => setHoveredMetricId(metric.id)}
+                    onMouseLeave={() => setHoveredMetricId(null)}
                   >
                     <span
                       className="w-3 h-3 rounded-full mr-3 shrink-0"
