@@ -205,7 +205,7 @@ const MetricGraph: React.FC = () => {
   const chartHeight = 600;
 
   return (
-    <Card className="w-full max-w-7xl mx-auto my-8">
+    <Card className="w-full mx-auto my-8">
       <CardHeader>
         <CardTitle className="text-2xl font-bold text-center">Metric Visualization Graph</CardTitle>
       </CardHeader>
