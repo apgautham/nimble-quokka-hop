@@ -6,7 +6,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
-  ReferenceArea,
 } from 'recharts';
 import { parseISO, format } from 'date-fns';
 import { Input } from '@/components/ui/input';
@@ -20,12 +19,12 @@ interface MetricData {
   TIMESTAMP: string;
 }
 
-interface ProcessedMetric {
+interface ProcessedLine {
   metricId: string;
-  timestamps: Date[];
-  type: 'line' | 'area';
+  timestamp: Date;
   color: string;
   label: string;
+  isSolid: boolean;
 }
 
 const MetricGraph: React.FC = () => {
@@ -108,7 +107,7 @@ const MetricGraph: React.FC = () => {
       metricMap.get(item.METRICID)?.push(timestamp);
     });
 
-    const graphElements: ProcessedMetric[] = [];
+    const graphElements: ProcessedLine[] = [];
 
     metricMap.forEach((timestamps, metricId) => {
       timestamps.sort((a, b) => a.getTime() - b.getTime());
@@ -121,26 +120,40 @@ const MetricGraph: React.FC = () => {
       }
 
       const color = isExpected ? 'hsl(var(--sidebar-ring))' : 'hsl(var(--destructive))';
-      const label = isExpected ? `Expected: ${metricId}` : `Actual: ${metricId}`;
+      const baseLabel = isExpected ? `Expected: ${metricId}` : `Actual: ${metricId}`;
 
       if (timestamps.length === 1) {
         graphElements.push({
           metricId,
-          timestamps,
-          type: 'line',
+          timestamp: timestamps[0],
           color,
-          label,
+          label: baseLabel,
+          isSolid: false, // Dotted line for single event
         });
-      } else if (timestamps.length === 2) {
+      } else if (timestamps.length >= 2) {
+        if (timestamps.length > 2) {
+          console.warn(`METRICID ${metricId} has ${timestamps.length} timestamps. Using oldest and latest.`);
+        }
+        const oldest = timestamps[0];
+        const latest = timestamps[timestamps.length - 1];
+
+        // Oldest is dotted
         graphElements.push({
           metricId,
-          timestamps,
-          type: 'area',
+          timestamp: oldest,
           color,
-          label,
+          label: `${baseLabel} (start)`,
+          isSolid: false,
         });
-      } else {
-        console.warn(`METRICID ${metricId} has ${timestamps.length} timestamps. Only 1 or 2 are supported.`);
+
+        // Latest is solid
+        graphElements.push({
+          metricId,
+          timestamp: latest,
+          color,
+          label: `${baseLabel} (end)`,
+          isSolid: true,
+        });
       }
     });
 
@@ -150,13 +163,13 @@ const MetricGraph: React.FC = () => {
   const chartDomain = useMemo(() => {
     if (processedGraphData.length === 0) return [0, 1];
 
-    const allTimestamps = processedGraphData.flatMap(p => p.timestamps);
+    const allTimestamps = processedGraphData.map(p => p.timestamp);
     if (allTimestamps.length === 0) return [0, 1];
 
     const minTime = Math.min(...allTimestamps.map(ts => ts.getTime()));
     const maxTime = Math.max(...allTimestamps.map(ts => ts.getTime()));
 
-    const padding = (maxTime - minTime) * 0.05;
+    const padding = (maxTime - minTime) * 0.05 || 10000; // Add padding, with a fallback for single point
     return [minTime - padding, maxTime + padding];
   }, [processedGraphData]);
 
@@ -225,43 +238,25 @@ const MetricGraph: React.FC = () => {
                 <YAxis
                   type="number"
                   domain={[0, 1]}
-                  ticks={[0, 1]}
-                  label={{ value: 'Value', angle: -90, position: 'insideLeft' }}
+                  ticks={[]}
+                  axisLine={false}
+                  tickLine={false}
+                  width={1}
                 />
                 <Tooltip
-                  labelFormatter={(label) => format(new Date(label), 'yyyy-MM-dd HH:mm:ss')}
-                  formatter={(value, name, props) => [`${props.payload.label}`, name]}
+                  labelFormatter={(label) => format(new Date(label), 'yyyy-MM-dd HH:mm:ss.SSS')}
+                  formatter={(value, name, props) => [`${props.payload.label}`, '']}
                 />
 
-                {processedGraphData.map((metric, index) => {
-                  if (metric.type === 'line') {
-                    return (
-                      <ReferenceLine
-                        key={`line-${metric.metricId}-${index}`}
-                        x={metric.timestamps[0].getTime()}
-                        stroke={metric.color}
-                        strokeDasharray="3 3"
-                        label={{ value: metric.label, position: 'top', fill: metric.color, fontSize: 12 }}
-                      />
-                    );
-                  } else if (metric.type === 'area') {
-                    return (
-                      <ReferenceArea
-                        key={`area-${metric.metricId}-${index}`}
-                        x1={metric.timestamps[0].getTime()}
-                        x2={metric.timestamps[1].getTime()}
-                        y1={0}
-                        y2={1}
-                        fill={metric.color}
-                        fillOpacity={0.3}
-                        stroke={metric.color}
-                        strokeOpacity={0.8}
-                        label={{ value: metric.label, position: 'top', fill: metric.color, fontSize: 12 }}
-                      />
-                    );
-                  }
-                  return null;
-                })}
+                {processedGraphData.map((line, index) => (
+                  <ReferenceLine
+                    key={`line-${line.metricId}-${index}`}
+                    x={line.timestamp.getTime()}
+                    stroke={line.color}
+                    strokeDasharray={line.isSolid ? undefined : "3 3"}
+                    label={{ value: line.label, position: 'top', fill: line.color, fontSize: 12 }}
+                  />
+                ))}
               </LineChart>
             </ResponsiveContainer>
           </div>
