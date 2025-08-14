@@ -223,6 +223,23 @@ const MetricGraph: React.FC = () => {
     );
   };
 
+  const handleChartMouseMove = (e: any) => {
+    if (e && e.activePayload && e.activePayload.length > 0) {
+      const metricId = e.activePayload[0].payload.metricId;
+      if (hoveredMetricId !== metricId) {
+        setHoveredMetricId(metricId);
+      }
+    } else {
+      if (hoveredMetricId !== null) {
+        setHoveredMetricId(null);
+      }
+    }
+  };
+
+  const handleChartMouseLeave = () => {
+    setHoveredMetricId(null);
+  };
+
   return (
     <Card className="w-full mx-auto">
       <CardHeader>
@@ -267,6 +284,8 @@ const MetricGraph: React.FC = () => {
                   <LineChart
                     data={processedGraphData}
                     margin={chartMargin}
+                    onMouseMove={handleChartMouseMove}
+                    onMouseLeave={handleChartMouseLeave}
                   >
                     <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.5} />
                     <XAxis
