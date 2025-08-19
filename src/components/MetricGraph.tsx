@@ -83,8 +83,14 @@ const MetricGraph: React.FC = () => {
   const [csvData, setCsvData] = useState<MetricData[]>([]);
   const [expectedMetricsInput, setExpectedMetricsInput] = useState<string>('');
   const [actualMetricsInput, setActualMetricsInput] = useState<string>('');
+  const [noiseMetricsInput, setNoiseMetricsInput] = useState<string>(''); // New state
+  const [missingMetricsInput, setMissingMetricsInput] = useState<string>(''); // New state
+
   const [expectedColor, setExpectedColor] = useState<string>('#3b82f6');
   const [actualColor, setActualColor] = useState<string>('#ef4444');
+  const [noiseColor, setNoiseColor] = useState<string>('#f59e0b'); // New state
+  const [missingColor, setMissingColor] = useState<string>('#6b7280'); // New state
+
   const [selectedMetricIds, setSelectedMetricIds] = useState<string[]>([]);
   const [hoveredMetricId, setHoveredMetricId] = useState<string | null>(null);
   const { toast } = useToast();
@@ -148,8 +154,17 @@ const MetricGraph: React.FC = () => {
     return new Set(actualMetricsInput.split(',').map(s => s.trim()).filter(Boolean));
   }, [actualMetricsInput]);
 
+  const noiseMetrics = useMemo(() => { // New memoized set
+    return new Set(noiseMetricsInput.split(',').map(s => s.trim()).filter(Boolean));
+  }, [noiseMetricsInput]);
+
+  const missingMetrics = useMemo(() => { // New memoized set
+    return new Set(missingMetricsInput.split(',').map(s => s.trim()).filter(Boolean));
+  }, [missingMetricsInput]);
+
   const { processedGraphData, uniqueMetrics } = useMemo(() => {
     const metricMap = new Map<string, Date[]>();
+    const allCsvMetricIds = new Set<string>(); // To track all metric IDs present in CSV
 
     csvData.forEach(item => {
       const timestamp = parseISO(item.TIMESTAMP);
@@ -161,21 +176,36 @@ const MetricGraph: React.FC = () => {
         metricMap.set(item.METRICID, []);
       }
       metricMap.get(item.METRICID)?.push(timestamp);
+      allCsvMetricIds.add(item.METRICID);
     });
 
     const graphElements: ProcessedLine[] = [];
     const uniqueMetricsSet = new Map<string, UniqueMetric>();
 
+    // Process metrics found in CSV data
     metricMap.forEach((timestamps, metricId) => {
       timestamps.sort((a, b) => a.getTime() - b.getTime());
 
-      const isExpected = expectedMetrics.has(metricId);
-      const isActual = actualMetrics.has(metricId);
+      let color = '';
+      let baseLabel = '';
 
-      if (!isExpected && !isActual) return;
-
-      const color = isExpected ? expectedColor : actualColor;
-      const baseLabel = isExpected ? `Expected: ${metricId}` : `Actual: ${metricId}`;
+      // Determine category precedence: Expected > Actual > Missing (if found in CSV) > Noise
+      if (expectedMetrics.has(metricId)) {
+        color = expectedColor;
+        baseLabel = `Expected: ${metricId}`;
+      } else if (actualMetrics.has(metricId)) {
+        color = actualColor;
+        baseLabel = `Actual: ${metricId}`;
+      } else if (missingMetrics.has(metricId)) { // If a "missing" metric is actually found in CSV
+        color = missingColor;
+        baseLabel = `Missing (Found): ${metricId}`;
+      } else if (noiseMetrics.has(metricId)) {
+        color = noiseColor;
+        baseLabel = `Noise: ${metricId}`;
+      } else {
+        // If a metric is in CSV but not in any defined category, skip it for now
+        return;
+      }
       
       if (!uniqueMetricsSet.has(metricId)) {
         uniqueMetricsSet.set(metricId, { id: metricId, color });
@@ -193,14 +223,25 @@ const MetricGraph: React.FC = () => {
         graphElements.push({ metricId, timestamp: latest, color, label: `${baseLabel} (end)`, isSolid: true, y: 0 });
       }
     });
+
+    // Add "truly missing" metrics (those in missingMetricsInput but NOT in csvData)
+    missingMetrics.forEach(metricId => {
+      if (!allCsvMetricIds.has(metricId)) {
+        // For truly missing metrics, we can't plot them on the timeline.
+        // We'll just add them to uniqueMetricsSet for the legend.
+        if (!uniqueMetricsSet.has(metricId)) {
+          uniqueMetricsSet.set(metricId, { id: metricId, color: missingColor });
+        }
+      }
+    });
     
     graphElements.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
     return {
       processedGraphData: graphElements,
-      uniqueMetrics: Array.from(uniqueMetricsSet.values()),
+      uniqueMetrics: Array.from(uniqueMetricsSet.values()).sort((a, b) => a.id.localeCompare(b.id)),
     };
-  }, [csvData, expectedMetrics, actualMetrics, expectedColor, actualColor]);
+  }, [csvData, expectedMetrics, actualMetrics, noiseMetrics, missingMetrics, expectedColor, actualColor, noiseColor, missingColor]);
 
   const chartDomain = useMemo(() => {
     if (processedGraphData.length === 0) return [0, 1];
@@ -263,13 +304,31 @@ const MetricGraph: React.FC = () => {
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
-            <div className="space-y-2 md:col-start-2">
+            <div className="space-y-2">
+                <Label htmlFor="noise-metrics">4. Noise Metric IDs</Label>
+                <Textarea id="noise-metrics" placeholder="e.g., metric_E,metric_F" value={noiseMetricsInput} onChange={(e) => setNoiseMetricsInput(e.target.value)} className="min-h-[40px]" />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="missing-metrics">5. Missing Metric IDs</Label>
+                <Textarea id="missing-metrics" placeholder="e.g., metric_G,metric_H" value={missingMetricsInput} onChange={(e) => setMissingMetricsInput(e.target.value)} className="min-h-[40px]" />
+            </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-4">
+            <div className="space-y-2">
                 <Label htmlFor="expected-color">Expected Metric Color</Label>
                 <Input id="expected-color" type="color" value={expectedColor} onChange={(e) => setExpectedColor(e.target.value)} className="p-1 h-10 w-full"/>
             </div>
             <div className="space-y-2">
                 <Label htmlFor="actual-color">Actual Metric Color</Label>
                 <Input id="actual-color" type="color" value={actualColor} onChange={(e) => setActualColor(e.target.value)} className="p-1 h-10 w-full"/>
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="noise-color">Noise Metric Color</Label>
+                <Input id="noise-color" type="color" value={noiseColor} onChange={(e) => setNoiseColor(e.target.value)} className="p-1 h-10 w-full"/>
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="missing-color">Missing Metric Color</Label>
+                <Input id="missing-color" type="color" value={missingColor} onChange={(e) => setMissingColor(e.target.value)} className="p-1 h-10 w-full"/>
             </div>
         </div>
       </CardContent>
